@@ -7,11 +7,12 @@ use lib '../lib';
 
 use Getopt::Long ();
 use Net::Spotify;
+use XML::TreePP ();
 
 my (
     $lookup, $uri, $extras,
     $search, $query, $page,
-    $help,
+    $humanize, $help,
 );
 
 Getopt::Long::GetOptions(
@@ -23,7 +24,9 @@ Getopt::Long::GetOptions(
     'query|q=s' => \$query,
     'page|p=i' => \$page,
 
-    'help|h' => \$help,
+    'humanize|h' => \$humanize,
+
+    'help|?' => \$help,
 );
 
 if ($help) {
@@ -44,6 +47,44 @@ if ($lookup && $uri) {
     }
 
     $response = $spotify->lookup(%request);
+
+    if ($humanize) {
+        my $tpp = XML::TreePP->new();
+
+        my $tree = $tpp->parse($response);
+
+        if ($tree) {
+            $uri =~ m{spotify:(artist|album|track):\w+};
+
+            my $type = $1;
+
+            if ($type eq 'artist') {
+                $response = sprintf(
+                    '%s -> Artist: %s',
+                    $uri,
+                    $tree->{artist}->{name},
+                );
+            }
+            elsif ($type eq 'album') {
+                $response = sprintf(
+                    '%s -> Album: %s, Artist: %s, Year: %s',
+                    $uri,
+                    $tree->{album}->{name},
+                    $tree->{album}->{artist}->{name},
+                    $tree->{album}->{released},
+                );
+            }
+            elsif ($type eq 'track') {
+                $response = sprintf(
+                    '%s -> Track: %s, Album: %s, Artist: %s',
+                    $uri,
+                    $tree->{track}->{name},
+                    $tree->{track}->{album}->{name},
+                    $tree->{track}->{artist}->{name},
+                );
+            }
+        }
+    }
 }
 elsif ($search && $query) {
     $page ||= 1;
@@ -78,13 +119,15 @@ net-spotify-tester.pl - A simple tool for testing Net::Spotify
 
     -l or --lookup              For lookup requests
     -u or --uri=<uri>           Spotify URI to lookup
-    -e or --extras=<extras>     Comma separated list of words for defining the detail level in the response
+    -x or --extras=<extras>     Comma separated list of words for defining the detail level in the response
 
     -s or --search=<method>     For search requests, the value defines the type of search (artist, album, track)
     -q or --query=<query>       Search string
     -p or --page=<page>         Page of the result set to show
 
-    -h or --help                Show this documentation
+    -h or --humanize            Formats the response to make it easier to read
+
+    -? or --help                Show this documentation
 
 =head1 DESCRIPTION
 
